@@ -1,8 +1,8 @@
 # chuck model routing: the single place to change which models chuck uses.
 #
 # After editing, run:  python3 -I scripts/sync-models.py
-# That copies the [profiles] defaults into the agents/*.md and
-# opencode/agents/*.md frontmatter. Chuck reads the rest of this file when it
+# That copies the [profiles] defaults into the agents/claude/*.md and
+# agents/opencode/*.md frontmatter. Chuck reads the rest of this file when it
 # routes work, so routing changes take effect on the next dispatch.
 #
 # Roles:   agent  = agent type to dispatch (first advertised one wins;
@@ -95,10 +95,10 @@ free      = { work = "Optional checkable, non-sensitive read-only units", agent 
 # Which role supplies the default model/effort written into each bundled agent
 # file by scripts/sync-models.py. Per-call values still win at dispatch time.
 [profiles]
-"agents/worker-bee.md"             = "claude.fanout"
-"agents/artisan.md"                = "claude.implement"
-"agents/reviewer.md"               = "claude.review"
-"opencode/agents/chuck-worker.md"   = "opencode.worker"
-"opencode/agents/chuck-artisan.md"  = "opencode.implement"
-"opencode/agents/chuck-reviewer.md" = "opencode.review"
-"opencode/agents/chuck-free.md"     = "opencode.free"
+"agents/claude/worker-bee.md"      = "claude.fanout"
+"agents/claude/artisan.md"         = "claude.implement"
+"agents/claude/reviewer.md"        = "claude.review"
+"agents/opencode/chuck-worker.md"   = "opencode.worker"
+"agents/opencode/chuck-artisan.md"  = "opencode.implement"
+"agents/opencode/chuck-reviewer.md" = "opencode.review"
+"agents/opencode/chuck-free.md"     = "opencode.free"

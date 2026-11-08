@@ -107,10 +107,10 @@ can cost more quota and time than a direct GPT call.
 ## Installation and maintenance
 
 OpenCode already discovers `~/.claude/skills/chuck`; no duplicate skill install
-is needed. Native optional profiles live in this skill's `opencode/agents/`.
-Link them into `~/.config/opencode/agents/` (or the XDG config equivalent),
-preserving any existing files. The separate Claude profiles in `agents/` are
-unchanged. OpenCode watches configuration changes; use `/reload` if the new
+is needed. Native optional profiles live in this skill's `agents/opencode/`
+(next to the Claude Code ones in `agents/claude/`). `sh deploy.sh opencode`
+links them into `~/.config/opencode/agents/` (or the XDG config equivalent),
+preserving any existing files. OpenCode watches configuration changes; use `/reload` if the new
 profiles are not advertised yet, not a service restart. Until then use built-ins.
 
 Official references: https://opencode.ai/docs/agents and

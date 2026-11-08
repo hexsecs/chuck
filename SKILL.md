@@ -28,7 +28,7 @@ Code and `[opencode]` is for OpenCode. Never hard-code a model the config doesn'
 If the user asks to change routing, edit `models.toml` and run
 `python3 -I scripts/sync-models.py` so the bundled agent defaults match.
 
-In **Claude Code**, use `[claude]` and the bundled `agents/*.md`.
+In **Claude Code**, use `[claude]` and the bundled `agents/claude/*.md`.
 Pass a separate `effort` only if the actual Agent schema supports it; otherwise
 use a supported agent default or report the limitation. Optional Workflow and
 fork features apply only when those tools and skills are available.
@@ -102,8 +102,9 @@ when step 3 says to.
    (`general-purpose` in Claude Code, `general` in OpenCode). For a review on
    a general agent, the brief says: read the diff and the code it touches,
    report defects with `file:line` and a failure scenario, change nothing.
-   The bundled profiles (`agents/`, linked into `~/.claude/agents/`, and
-   `opencode/agents/`) carry the config's defaults, but per-call values win.
+   The bundled profiles (`agents/claude/` and `agents/opencode/`, linked in
+   with `sh deploy.sh claude|opencode`) carry the config's defaults, but
+   per-call values win.
 
    In Claude Code, `Explore`, `Plan` and `reviewer` are read-only; anything that edits files
    goes to `worker-bee`, `artisan` or `general-purpose`. When escalating a

@@ -7,22 +7,25 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNTIMES = ("claude", "opencode")
 
 
 class DeployTests(unittest.TestCase):
-    def deploy(self, dest=None, env=None):
-        args = ["sh", str(ROOT / "deploy-opencode.sh")]
-        if dest is not None:
-            args.append(str(dest))
-        return subprocess.run(args, capture_output=True, text=True, env=env)
+    def deploy(self, *args, env=None):
+        return subprocess.run(["sh", str(ROOT / "deploy.sh"), *map(str, args)],
+                              capture_output=True, text=True, env=env)
 
     def test_install_and_repeat(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            dest = Path(tmp) / "agents with spaces"
-            for _ in range(2):
-                result = self.deploy(dest)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                for source in (ROOT / "opencode/agents").glob("*.md"):
+        for runtime in RUNTIMES:
+            with self.subTest(runtime=runtime), tempfile.TemporaryDirectory() as tmp:
+                dest = Path(tmp) / "agents with spaces"
+                for _ in range(2):
+                    result = self.deploy(runtime, dest)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                sources = sorted((ROOT / "agents" / runtime).glob("*.md"))
+                self.assertTrue(sources)
+                self.assertEqual(sorted(p.name for p in dest.iterdir()), [s.name for s in sources])
+                for source in sources:
                     self.assertTrue((dest / source.name).is_symlink())
                     self.assertEqual((dest / source.name).resolve(), source)
 
@@ -35,7 +38,7 @@ class DeployTests(unittest.TestCase):
                     conflict.symlink_to(dest / "missing")
                 else:
                     conflict.write_text("user work\n")
-                result = self.deploy(dest)
+                result = self.deploy("opencode", dest)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(list(dest.iterdir()), [conflict])
                 if broken_link:
@@ -43,12 +46,18 @@ class DeployTests(unittest.TestCase):
                 else:
                     self.assertEqual(conflict.read_text(), "user work\n")
 
-    def test_xdg_default(self):
+    def test_default_destinations(self):
         with tempfile.TemporaryDirectory() as tmp:
-            env = dict(os.environ, XDG_CONFIG_HOME=tmp)
-            result = self.deploy(env=env)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue((Path(tmp) / "opencode/agents/chuck-free.md").is_symlink())
+            env = dict(os.environ, HOME=tmp, XDG_CONFIG_HOME=str(Path(tmp) / "xdg"))
+            for runtime in RUNTIMES:
+                self.assertEqual(self.deploy(runtime, env=env).returncode, 0)
+            self.assertTrue((Path(tmp) / ".claude/agents/worker-bee.md").is_symlink())
+            self.assertTrue((Path(tmp) / "xdg/opencode/agents/chuck-free.md").is_symlink())
+
+    def test_requires_runtime(self):
+        for args in ((), ("codex",)):
+            with self.subTest(args=args):
+                self.assertEqual(self.deploy(*args).returncode, 2)
 
 
 if __name__ == "__main__":
