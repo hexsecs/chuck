@@ -22,7 +22,13 @@ aliases, effort levels and escalation tiers below. In particular, `Agent` means
 discovered `provider/model#variant`, not an extra argument. A skill cannot add
 parameters to a tool schema or grant permissions.
 
-In **Claude Code**, use the Claude routing table and bundled `agents/*.md`.
+**Models come from `models.toml`** (this skill's folder): read it before the
+first dispatch of a session and route only from it. `[claude]` is for Claude
+Code and `[opencode]` is for OpenCode. Never hard-code a model the config doesn't name.
+If the user asks to change routing, edit `models.toml` and run
+`python3 -I scripts/sync-models.py` so the bundled agent defaults match.
+
+In **Claude Code**, use `[claude]` and the bundled `agents/*.md`.
 Pass a separate `effort` only if the actual Agent schema supports it; otherwise
 use a supported agent default or report the limitation. Optional Workflow and
 fork features apply only when those tools and skills are available.
@@ -38,18 +44,9 @@ model, and effort for each task to get the best result at the lowest cost per
 *completed* task (not per token). I keep track of what's in flight, check what
 comes back, and bring you only the decisions that are yours to make.
 
-Claude Code cost basis only: for estimates, assume Claude API rates (USD per million tokens,
-input/output, checked 2026-11-06):
-
-| Tier   | Agent `model` | Price in/out                                  | Good at                                                          | Weak spot                                                     |
-|--------|---------------|-----------------------------------------------|------------------------------------------------------------------|---------------------------------------------------------------|
-| Haiku  | `haiku`       | $0.10 / $0.50 (≤100K prompt), $0.50 / $2.50 above | High-volume, checkable work: extraction, lookups, classification | Lower accuracy; refuses offensive-security content with no fallback |
-| Sonnet | `sonnet`      | $2 / $10                                      | Well-scoped building, writing, tool use, verification            | Over-delegates to reviewers at max effort                     |
-| Opus   | `opus`        | $4 / $20                                      | Judgment, design, ambiguous debugging, long agentic work         | 2x Sonnet price; wasted on mechanical work                    |
-| Fable  | `fable`       | $10 / $50                                     | The hardest reasoning, multi-hour work                           | 2.5x Opus price, slowest; rarely beats Opus enough to pay off |
-
-Haiku's price jumps 5x past a 100K-token prompt, so keep Haiku briefs and
-reading scoped; a Haiku worker that reads a large tree can cost more than Sonnet.
+Each tier in `models.toml` lists its price, what it is good at, and its weak
+spot. Use those for cost estimates and tier choice (Claude Code prices are
+Claude API rates as of `prices_checked`).
 
 What the measurements say (numbers and sources in
 `references/model-selection.md`):
@@ -97,42 +94,29 @@ when step 3 says to.
       context with reading, is too big for one context, or can run in
       parallel with something else.
 
-4. **Route each delegated task.** Apply the runtime adapter first. For Claude
-   Code, start at the row that fits and explicitly select `model` and supported
-   `effort` on each Agent call. `worker-bee`, `artisan` and `reviewer` ship with this
-   skill (`agents/`, linked into `~/.claude/agents/`); their definitions set
-   the same model and effort as defaults, but the per-call values win. Use only
-   agent types the session lists as available; if a row's type is missing, use
-   an advertised general agent (`general-purpose` in Claude Code, `general` in
-   OpenCode) with the selected model and supported effort (and, for `reviewer`, a
-   brief saying: read the diff and the code it touches, report defects with
-   `file:line` and a failure scenario, change nothing).
-
-   | Work                                                                         | Agent type                    | model    | effort   |
-   |------------------------------------------------------------------------------|-------------------------------|----------|----------|
-   | Fan-out lookups, per-file scans, mechanical edits                            | `worker-bee`                  | `haiku`  | `low`    |
-   | Fetch one URL and extract an answer                                          | `web-fetch` if listed, else `worker-bee` | `haiku`  | `low`    |
-   | Find where something lives across a big tree (conclusion only)               | `Explore`                     | `haiku`  | `low`    |
-   | Understand how a subsystem works (read and explain)                          | `Explore`                     | `sonnet` | `medium` |
-   | Implement a clearly specified feature, fix, refactor, or script              | `artisan`                     | `sonnet` | `medium` |
-   | Same, but multi-file or touching tricky invariants                           | `artisan`                     | `sonnet` | `high`   |
-   | Docs, reports, or prose from facts already gathered                          | `artisan`                     | `sonnet` | `medium` |
-   | Independent review of a diff or claim                                        | `reviewer`                    | `sonnet` | `high`   |
-   | Design with tradeoffs, ambiguous root-cause debugging, migration planning    | `Plan` or `general-purpose`   | `opus`   | `medium` |
-   | Security analysis, concurrency, crypto, anything costly if wrong             | `general-purpose`             | `opus`   | `high`   |
-   | Opus at `xhigh` already failed, or you asked for it                          | `general-purpose`             | `fable`  | `high`   |
+4. **Route each delegated task.** Apply the runtime adapter first. Pick the
+   role in `models.toml` (`[claude.roles]` or `[opencode.roles]`) whose `work`
+   fits. Then explicitly select that role's tier `model` and the role's `effort`
+   on each delegation call. A role's `agent` list is in preference order: use
+   the first one the session advertises, else the runtime's general agent
+   (`general-purpose` in Claude Code, `general` in OpenCode). For a review on
+   a general agent, the brief says: read the diff and the code it touches,
+   report defects with `file:line` and a failure scenario, change nothing.
+   The bundled profiles (`agents/`, linked into `~/.claude/agents/`, and
+   `opencode/agents/`) carry the config's defaults, but per-call values win.
 
    In Claude Code, `Explore`, `Plan` and `reviewer` are read-only; anything that edits files
    goes to `worker-bee`, `artisan` or `general-purpose`. When escalating a
-   `reviewer` task past Sonnet, keep `reviewer` and raise `model`.
+   `reviewer` task to a higher tier, keep `reviewer` and raise `model`.
 
-   Hard rules:
-   - **No Haiku for security content** (vulnerabilities, exploits, attacks).
-     It refuses with no fallback. Start at Sonnet.
-   - **Haiku output must be checkable**: JSON with a stated shape, tests that
-     run, or output a stronger model reads next. It never reaches you unreviewed.
-   - **Never pick Fable on my own.** Only when you ask, or Opus at `xhigh`
-     has already failed.
+   Hard rules (tier flags in `models.toml`):
+   - **`no_security` tiers never get security content** (vulnerabilities,
+     exploits, attacks). Start at the next tier on the ladder.
+   - **`checkable` tier output must be checkable**: JSON with a stated shape,
+     tests that run, or output a stronger tier reads next. It never reaches
+     you unreviewed.
+   - **Never pick an `ask_first` tier on my own.** Only when you ask, or the
+     tier below it has already failed at `max_effort` and you approved the step up.
    - **The reviewer isn't the author.** Verification runs on a different
      agent, at the author's tier or higher.
    - In Claude Code, a `fork` inherits my model and ignores `model`. Use forks only when the
@@ -171,10 +155,11 @@ when step 3 says to.
    reviewer's "fix" verdict, a refusal, or "this needs more judgment":
    1. Retry once on the same tier with effort one step higher, and say in
       the brief what went wrong.
-   2. If it fails again, move up one tier.
-   3. Never retry the same tier and effort twice. After Opus at `xhigh`,
-      stop and ask (via `AskUserQuestion`) whether you want Fable or a
-      different approach.
+   2. If it fails again, move up one tier on the runtime's `ladder`.
+   3. Never retry the same tier and effort twice. Before stepping up to an
+      `ask_first` tier, or after the top tier fails at `max_effort`, stop and
+      ask (via `AskUserQuestion`) whether you want that tier or a different
+      approach.
 
 9. **Keep you in the loop without noise.**
    - Short updates when something finishes, fails, or needs you.

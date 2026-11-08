@@ -1,0 +1,104 @@
+# chuck model routing: the single place to change which models chuck uses.
+#
+# After editing, run:  python3 -I scripts/sync-models.py
+# That copies the [profiles] defaults into the agents/*.md and
+# opencode/agents/*.md frontmatter. Chuck reads the rest of this file when it
+# routes work, so routing changes take effect on the next dispatch.
+#
+# Roles:   agent  = agent type to dispatch (first advertised one wins;
+#                   fall back to the runtime's general agent)
+#          tier   = a key in that runtime's [*.tiers]
+#          effort = reasoning effort for the call
+# Tiers:   model  = what goes in the call's `model` field
+#          ask_first   = never pick this tier unprompted; ask the user first
+#          no_security = never use this tier for security content
+#          checkable   = output must be checkable (JSON shape, tests) and is
+#                        always reviewed by a stronger tier
+# ladder = escalation order, cheapest first. `max_effort` caps effort retries
+#          on a tier before moving up.
+
+# ---------------------------------------------------------------- Claude Code
+[claude]
+ladder = ["haiku", "sonnet", "opus", "fable"]
+max_effort = "xhigh"
+prices_checked = "2026-11-06"   # USD per million tokens, Claude API
+
+[claude.tiers.haiku]
+model = "haiku"
+price = "$0.10 / $0.50 (<=100K prompt), $0.50 / $2.50 above"
+good_at = "High-volume, checkable work: extraction, lookups, classification"
+weak_spot = "Lower accuracy; refuses offensive-security content with no fallback; price jumps 5x past a 100K prompt, so keep briefs and reading scoped"
+no_security = true
+checkable = true
+
+[claude.tiers.sonnet]
+model = "sonnet"
+price = "$2 / $10"
+good_at = "Well-scoped building, writing, tool use, verification"
+weak_spot = "Over-delegates to reviewers at max effort"
+
+[claude.tiers.opus]
+model = "opus"
+price = "$4 / $20"
+good_at = "Judgment, design, ambiguous debugging, long agentic work"
+weak_spot = "2x Sonnet price; wasted on mechanical work"
+
+[claude.tiers.fable]
+model = "fable"
+price = "$10 / $50"
+good_at = "The hardest reasoning, multi-hour work"
+weak_spot = "2.5x Opus price, slowest; rarely beats Opus enough to pay off"
+ask_first = true
+
+[claude.roles]
+fanout         = { work = "Fan-out lookups, per-file scans, mechanical edits", agent = ["worker-bee"], tier = "haiku", effort = "low" }
+fetch          = { work = "Fetch one URL and extract an answer", agent = ["web-fetch", "worker-bee"], tier = "haiku", effort = "low" }
+locate         = { work = "Find where something lives across a big tree (conclusion only)", agent = ["Explore"], tier = "haiku", effort = "low" }
+explain        = { work = "Understand how a subsystem works (read and explain)", agent = ["Explore"], tier = "sonnet", effort = "medium" }
+implement      = { work = "Implement a clearly specified feature, fix, refactor, or script", agent = ["artisan"], tier = "sonnet", effort = "medium" }
+implement_hard = { work = "Same, but multi-file or touching tricky invariants", agent = ["artisan"], tier = "sonnet", effort = "high" }
+docs           = { work = "Docs, reports, or prose from facts already gathered", agent = ["artisan"], tier = "sonnet", effort = "medium" }
+review         = { work = "Independent review of a diff or claim", agent = ["reviewer"], tier = "sonnet", effort = "high" }
+design         = { work = "Design with tradeoffs, ambiguous root-cause debugging, migration planning", agent = ["Plan", "general-purpose"], tier = "opus", effort = "medium" }
+security       = { work = "Security analysis, concurrency, crypto, anything costly if wrong", agent = ["general-purpose"], tier = "opus", effort = "high" }
+last_resort    = { work = "Top non-ask_first tier at max_effort already failed, or the user asked for it", agent = ["general-purpose"], tier = "fable", effort = "high" }
+
+# ------------------------------------------------------------------- OpenCode
+# Model IDs and #variants were present on 2026-11-06. Chuck still discovers
+# models at runtime and treats this as a starting policy, not a ranking.
+[opencode]
+ladder = ["free", "luna", "sol"]
+max_effort = "xhigh"
+
+[opencode.tiers.free]
+model = "opencode/inkling-2-small-free"
+note = "Optional, opt-in only; see the free-lane privacy preflight in references/opencode.md"
+no_security = true
+checkable = true
+optional = true
+
+[opencode.tiers.luna]
+model = "openai/gpt-6-luna"
+
+[opencode.tiers.sol]
+model = "openai/gpt-6.1-sol"
+
+[opencode.roles]
+worker    = { work = "Mechanical extraction, scoped lookup, classification", agent = ["chuck-worker", "explore", "general"], tier = "luna", effort = "low" }
+implement = { work = "Clear implementation, scripts, docs, subsystem explanation", agent = ["chuck-artisan", "general"], tier = "sol", effort = "medium" }
+hard      = { work = "Tricky invariants, security, concurrency, crypto", agent = ["chuck-artisan", "general"], tier = "sol", effort = "high" }
+review    = { work = "Independent review (general only with an explicit read-only brief)", agent = ["chuck-reviewer", "general"], tier = "sol", effort = "high" }
+design    = { work = "Ambiguous debugging, design, failed high-effort work", agent = ["general"], tier = "sol", effort = "xhigh" }
+free      = { work = "Optional checkable, non-sensitive read-only units", agent = ["chuck-free", "explore"], tier = "free", effort = "low" }
+
+# ------------------------------------------------------------------- Profiles
+# Which role supplies the default model/effort written into each bundled agent
+# file by scripts/sync-models.py. Per-call values still win at dispatch time.
+[profiles]
+"agents/worker-bee.md"             = "claude.fanout"
+"agents/artisan.md"                = "claude.implement"
+"agents/reviewer.md"               = "claude.review"
+"opencode/agents/chuck-worker.md"   = "opencode.worker"
+"opencode/agents/chuck-artisan.md"  = "opencode.implement"
+"opencode/agents/chuck-reviewer.md" = "opencode.review"
+"opencode/agents/chuck-free.md"     = "opencode.free"

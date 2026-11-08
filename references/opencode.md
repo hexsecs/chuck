@@ -40,23 +40,16 @@ Empty `cost` metadata means unknown, not zero. Catalog prices on another
 provider do not describe the user's subscription. Do not promise remaining
 quota or dollar savings without measurement.
 
-### Initial GPT-first routing profile
+### Routing profile: `[opencode]` in `models.toml`
 
-These exact IDs and variants were present on 2026-11-06. Revalidate at runtime.
-The profile is a starting policy, not a measured ranking or Claude equivalence.
+Roles, tiers and the escalation ladder live in the skill's `models.toml`. Use
+`explore` for read-only fallbacks and `general` for edits. The profile is a
+starting policy, not a measured ranking or Claude equivalence. Revalidate its
+IDs against discovery at runtime; if a configured model is missing, say so and
+use the nearest available tier on the ladder rather than guessing a new ID.
 
-| Work | Preferred agent (fallback) | Model | Effort |
-|---|---|---|---|
-| Mechanical extraction, scoped lookup, classification | `chuck-worker` (`explore` for reads, `general` for edits) | `openai/gpt-6-luna` | low |
-| Clear implementation, scripts, docs, subsystem explanation | `chuck-artisan` (`general`, or `explore` for explanation) | `openai/gpt-6.1-sol` | medium |
-| Tricky invariants, security, concurrency, crypto | `chuck-artisan` (`general`) | `openai/gpt-6.1-sol` | high |
-| Independent review | `chuck-reviewer` (`general`, explicitly read-only) | `openai/gpt-6.1-sol` | high |
-| Ambiguous debugging, design, failed high-effort work | `general` | `openai/gpt-6.1-sol` | xhigh |
-| Optional checkable, non-sensitive read-only units | `chuck-free` (`explore`) | `opencode/inkling-2-small-free` | low |
-
-For example, dispatch a normal implementation with
-`model:"openai/gpt-6.1-sol#medium"`; a free unit uses
-`model:"opencode/inkling-2-small-free#low"`. If a model has no variants, omit
+Dispatch as `model:"<tier model>#<role effort>"`, e.g. the `implement` role
+becomes `model:"openai/gpt-6.1-sol#medium"`. If a model has no variants, omit
 the `#...` suffix and record effort as unsupported. Do not infer that newer,
 more expensive or differently named models are stronger. Other GPTs (including
 Terra and Astra) remain available for explicit user choice or measured profile
@@ -103,11 +96,12 @@ can cost more quota and time than a direct GPT call.
 1. Verify the failure first. Distinguish model quality from tool/config errors.
 2. For reasoning failures, retry once at the next supported higher variant.
    Never repeat the same model/variant/brief unchanged.
-3. If a free model has no higher supported variant, or the retry fails, move to
-   Luna; move Luna failures to Sol at medium/high. For security start on Sol.
-4. Sol failures move through supported higher variants up to xhigh. After an
-   xhigh failure, ask whether to try a different validated model, use max, or
-   change approach. There is no automatic Fable/API-spend escalation.
+3. If a tier has no higher supported variant, or the retry fails, move to the
+   next tier on `[opencode].ladder` (at medium/high). Never start security
+   work on a `no_security` tier.
+4. The top tier moves through supported higher variants up to `max_effort`.
+   After that fails, ask whether to try a different validated model, use max,
+   or change approach. There is no automatic Fable/API-spend escalation.
 5. Fix schema/config errors directly; increasing effort won't repair them.
 
 ## Installation and maintenance
