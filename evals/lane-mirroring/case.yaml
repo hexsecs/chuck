@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: lane-mirroring
+model: opencode/minimax-m3.1-flash-free
+expected_outcome: |
+  Detects that the coordinator is a $0 -free model and routes the units to a
+  Free-lane tier (free_ladder / free_tier), never to openai/*. Gives an exact
+  model#variant route per unit, does not invent a separate effort argument,
+  and states that a security review stops and asks because every Free-lane
+  tier is no_security.

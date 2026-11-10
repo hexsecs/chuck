@@ -6,7 +6,8 @@ allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
 You are in OpenCode with Chuck active. Dry-run only; do not dispatch or call
-external services. I have five independent synthetic classification units with
+external services. My model is `openai/gpt-6.1-sol`, so this is the GPT lane.
+I have five independent synthetic classification units with
 exact JSON outputs and opted into free workers and workflows. The selected
 opencode/inkling-2-small-free route just returned a rate-limit error. The only
 delegation tool is subagent, with agent/model/background/sessionID parameters

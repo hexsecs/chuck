@@ -34,7 +34,7 @@ the first dispatch, then discover and validate the lane's models.
 ### 1. Identify the coordinator model
 
 Read the `Your Model` block (provider ID + model ID) from the runtime context
-or your self-knowledge (e.g. `openai/gpt-6.1-sol`, `opencode/crouton-alpha-free`).
+or your self-knowledge (e.g. `openai/gpt-6.1-sol`, `opencode/minimax-m3.1-flash-free`).
 Re-detect each session; the user changing the session model mid-session
 changes the lane.
 
@@ -46,6 +46,20 @@ changes the lane.
 
 Never route subagents to a different provider than the coordinator, except the
 opt-in `free` role in the GPT lane (see below). Escalation stays in the lane.
+
+### Free lane scope: checkable, non-security units only
+
+Every Free-lane tier is `no_security` + `checkable`. That makes the lane safe
+for bounded, verifiable work and wrong for anything needing judgment or
+security. In `models.toml` the `hard`, `review` and `design` roles therefore
+have **no `free_tier`** — they are GPT-lane-only.
+
+- In the Free lane, those roles **stop and ask**; do not substitute a free tier.
+- `checkable` output needs a stronger tier to read it next. `free_hard` is the
+  top of `free_ladder`, so nothing may start there: `worker` starts at
+  `free_small`, `implement` at `free`, and both escalate upward.
+- `tests/test_models_config.py` enforces both rules; a config that breaks them
+  fails `make test`.
 
 ### 2. Discovery pass (`opencode.models`)
 
@@ -112,8 +126,8 @@ against the discovery pass at runtime.
 
 Dispatch as `model:"<tier model>#<role effort>"`, where `<tier model>` comes
 from the lane's key: e.g. `implement` is `openai/gpt-6.1-sol#medium` in the
-GPT lane (`tier:"sol"`) and `opencode/crouton-alpha-free#medium` in the
-Free lane (`free_tier:"free"`). If a model has no variants, omit the
+GPT lane (`tier:"sol"`) and `opencode/minimax-m3.1-flash-free#medium` in
+the Free lane (`free_tier:"free"`). If a model has no variants, omit the
 `#...` suffix and record effort as unsupported. Do not infer that newer,
 more expensive or differently named models are stronger. Other GPTs
 (including Terra and Astra) and other free models remain available for
@@ -130,8 +144,8 @@ exploits, attacks); `checkable` output must be JSON/tests or a stronger
 lane tier's input and is never passed on unreviewed; never pick an
 `ask_first` tier unprompted. In the Free lane every tier is
 `no_security`+`checkable`, so a security task has no eligible free tier —
-stop and ask before using a paid tier. This is why the `hard` role's
-"security" work is GPT-lane-only in practice.
+stop and ask before using a paid tier. That is also why `hard`, `review` and
+`design` carry no `free_tier`: they are GPT-lane-only.
 
 ## Optional cross-provider free worker (GPT lane only)
 

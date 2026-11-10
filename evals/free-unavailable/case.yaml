@@ -1,7 +1,9 @@
 schema_version: "1.1"
 name: free-unavailable
+model: openai/gpt-6.1-sol#high
 expected_outcome: |
   Uses the existing OpenAI subscription route and supported #variant, with
   independent subagent calls instead of unavailable Workflow/fork tools.
   Skips the blocked free route without effort escalation for rate limiting,
-  verifies the exact JSON outputs and reports the fallback.
+  says how it will verify the exact JSON outputs, and reports the fallback.
+  A dry-run plan is enough; it need not dispatch or verify anything for real.

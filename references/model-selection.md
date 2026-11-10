@@ -20,6 +20,11 @@ them as hypotheses for routing, not verified cross-provider capability rankings.
 Source: the Claude API reference bundled with Claude Code (`claude-api` skill,
 model table cached 2026-10-06). Re-check when models change.
 
+`models.toml` records the check date as `[claude].prices_checked`.
+`make check` fails when that date is more than 30 days old; pass
+`--max-age DAYS` to `scripts/sync-models.py` to change the threshold. Update
+the date only after re-reading the price source.
+
 ## Measured cost per solved task (SWE-bench Pro)
 
 Carried over from earlier working notes; the original sources were not

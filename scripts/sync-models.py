@@ -1,14 +1,17 @@
 """Copy model/effort defaults from models.toml into the bundled agent profiles.
 
-Usage: python3 -I scripts/sync-models.py [--check]
---check exits 1 (changing nothing) if any profile is out of date.
+Usage: python3 -I scripts/sync-models.py [--check] [--max-age DAYS]
+--check exits 1 (changing nothing) if any profile is out of date, or if the
+Claude lane's `prices_checked` date is older than --max-age (default 30 days).
 """
+from datetime import date
 from pathlib import Path
 import re
 import sys
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MAX_AGE = 30
 
 
 def wanted(config, role_path):
@@ -32,8 +35,29 @@ def sync(text, fields):
     return head + sep + body
 
 
+def prices_age(config):
+    """Days since `[claude].prices_checked`, or None if unset/unparseable."""
+    raw = config.get("claude", {}).get("prices_checked")
+    if not raw:
+        return None
+    try:
+        checked = date.fromisoformat(str(raw))
+    except ValueError:
+        return None
+    return (date.today() - checked).days
+
+
 def main(argv):
     check = "--check" in argv
+    max_age = DEFAULT_MAX_AGE
+    if "--max-age" in argv:
+        i = argv.index("--max-age")
+        try:
+            max_age = int(argv[i + 1])
+        except (IndexError, ValueError):
+            print(f"error: --max-age needs an integer, got {argv[i + 1:i + 2]}",
+                  file=sys.stderr)
+            return 2
     config = tomllib.loads((ROOT / "models.toml").read_text())
     stale = []
     for rel, role_path in config["profiles"].items():
@@ -47,6 +71,14 @@ def main(argv):
     verb = "out of date" if check else "updated"
     for rel in stale:
         print(f"{verb}: {rel}")
+
+    age = prices_age(config)
+    if age is not None and age > max_age:
+        label = "stale" if check else "warning"
+        print(f"{label}: [claude].prices_checked is {age} days old "
+              f"(--max-age {max_age})")
+        if check:
+            return 1
     return 1 if check and stale else 0
 
 

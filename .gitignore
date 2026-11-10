@@ -1,1 +1,4 @@
 __pycache__/
+# Eval transcripts written by scripts/run-evals.py
+evals/**/.last-run.txt
+evals/**/.last-run.json

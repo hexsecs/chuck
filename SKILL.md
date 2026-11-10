@@ -31,7 +31,7 @@ If the user asks to change routing, edit `models.toml` and run
 **Main-model lane (OpenCode only):** Before the first dispatch, identify the
 coordinator's own model from the runtime context (the `Your Model` block:
 provider ID + model ID) or your self-knowledge (e.g. `openai/gpt-6.1-sol`,
-`opencode/crouton-alpha-free`). If it is `openai/*`, use the GPT lane
+`opencode/minimax-m3.1-flash-free`). If it is `openai/*`, use the GPT lane
 (`ladder`, `tier`); if it ends in `-free` or otherwise costs $0, use the Free
 lane (`free_ladder`, `free_tier`). Subagents stay in the coordinator's lane;
 never route to a different provider spontaneously, including on escalation.
@@ -61,14 +61,16 @@ Each tier in `models.toml` lists its price, what it is good at, and its weak
 spot. Use those for cost estimates and tier choice (Claude Code prices are
 Claude API rates as of `prices_checked`).
 
-What the measurements say (numbers and sources in
-`references/model-selection.md`):
+What the measurements suggest (numbers and sources in
+`references/model-selection.md`). The provenance is incomplete, so treat these
+as hypotheses to re-measure, not established findings:
 
-- **Lowering effort beats switching models.** Opus at low effort matched
-  Sonnet at high; Opus at medium beat Fable at high for a fraction of the cost.
-- **Escalation pays when failure is visible.** Run cheap first and re-run only
-  the failures higher; that beat running everything high on both cost and
-  success rate.
+- **Lowering effort may beat switching models.** Opus at low effort reportedly
+  matched Sonnet at high; Opus at medium reportedly beat Fable at high for a
+  fraction of the cost. Source not recorded.
+- **Escalation may pay when failure is visible.** Running cheap first and
+  re-running only the failures higher reportedly beat running everything high
+  on both cost and success rate. Source not recorded.
 - **Delegation isn't free.** A subagent starts with a fresh context and no
   shared prompt cache. Workers saved money only on routine, many-unit work or
   work too big for one context; otherwise the orchestrator doing it itself won.
@@ -136,7 +138,10 @@ when step 3 says to.
      paid tier. Never silently fall back to paid.
    - **`checkable` tier output must be checkable**: JSON with a stated shape,
      tests that run, or output a stronger tier reads next. It never reaches
-     you unreviewed.
+     you unreviewed. In the Free lane `free_hard` is the top of the ladder,
+     so nothing starts there: `worker` starts at `free_small`, `implement` at
+     `free`, and both escalate upward. `hard`, `review` and `design` have no
+     `free_tier` and are GPT-lane-only; in the Free lane they stop and ask.
    - **Never pick an `ask_first` tier on my own.** Only when you ask, or the
      tier below it has already failed at `max_effort` and you approved the step up.
    - **The reviewer isn't the author.** Verification runs on a different
@@ -202,6 +207,9 @@ when step 3 says to.
     - what was delivered, with paths or MR links
     - what was verified, and how
     - agents used, as tier x count, and any escalations
+    - cost/quota: models used, estimated input/output tokens, and cost when
+      known; write `unknown` rather than guessing (catalog cost metadata is
+      often absent, and a ChatGPT subscription's quota is not visible to me)
     - what's still open or needs your call
 
     Report failures and skipped steps as plainly as successes. Small jobs

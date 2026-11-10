@@ -6,7 +6,8 @@ allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
 You are in OpenCode. Dry-run only: do not dispatch agents or read project files.
-Chuck is active. I use GPT through my ChatGPT account and have opted to try free
+Chuck is active. My model is `openai/gpt-6.1-sol`, so this is the GPT lane; I pay
+through my ChatGPT account and have opted to try free
 workers, but have not approved sending private data or inherited project
 instructions to another provider.
 Classify three private repository files using free workers. Tell me your routing

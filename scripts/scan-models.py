@@ -256,8 +256,13 @@ def update(candidates: list[Candidate], scanned: str | None = None) -> str:
     return new
 
 
-def check(candidates: list[Candidate], config_text: str | None = None) -> int:
-    """Exit 1 when the catalog scan disagrees with models.toml."""
+def check(candidates: list[Candidate], config_text: str | None = None,
+          allow_unknown: bool = False) -> int:
+    """Exit 1 when the catalog scan disagrees with models.toml.
+
+    `allow_unknown` compares model ids only, for sources with no cost data.
+    It cannot prove a model is $0, so it only catches renamed/removed models.
+    """
     current = set(
         tomllib.loads(config_text if config_text is not None else CONFIG.read_text())
         .get("opencode", {})
@@ -268,6 +273,16 @@ def check(candidates: list[Candidate], config_text: str | None = None) -> int:
     current.discard("scanned")
     missing = latest - current
     stale = current - latest
+    if allow_unknown:
+        # The source is an id list, not a verified $0 catalog, so a model
+        # missing from it may be a catalog gap rather than a real removal.
+        for m in sorted(missing):
+            print(f"in scanned id list but not models.toml: {m}")
+        for m in sorted(stale):
+            print(f"in models.toml but not scanned id list (may be a catalog gap): {m}")
+        if missing or stale:
+            print("note: cost data unavailable; compared ids only")
+        return 1 if (missing or stale) else 0
     for m in sorted(missing):
         print(f"missing from models.toml: {m}")
     for m in sorted(stale):
@@ -283,6 +298,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="list provider model ids (no cost data; cannot prove $0)")
     g.add_argument("--update", action="store_true", help="write candidates to models.toml")
     g.add_argument("--check", action="store_true", help="fail if models.toml is stale")
+    p.add_argument("--allow-unknown", action="store_true",
+                   help="with --check: compare model ids only (no cost data needed)")
     p.add_argument("--provider", action="append", dest="providers",
                    help="provider id (repeatable); default: opencode openrouter")
     p.add_argument("--providers", default=None,
@@ -320,10 +337,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"updated {CONFIG} with {len(candidates)} free candidates")
         return 0
     if args.check:
-        # The CLI source has no cost data, so it cannot confirm candidates.
-        print("error: --check needs real cost data; use the Code Mode path",
-              file=sys.stderr)
-        return 2
+        if result.cost_unknown and not args.allow_unknown:
+            print("error: --check needs real cost data; use the Code Mode path "
+                  "or pass --allow-unknown to compare ids only", file=sys.stderr)
+            return 2
+        return check(candidates, allow_unknown=args.allow_unknown)
     print(render(candidates, result.cost_unknown))
     return 0
 

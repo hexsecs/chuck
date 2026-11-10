@@ -173,7 +173,7 @@ optional = true
 
 [opencode.tiers.free]
 model = "opencode/minimax-m3.1-flash-free"
-note = "Free-lane default implement/review tier; verified $0 on 2026-11-09. Ranking vs flint-40b-free is unmeasured — swap after a measured comparison."
+note = "Free-lane default implement tier; verified $0 on 2026-11-09. Ranking vs flint-40b-free is unmeasured — swap after a measured comparison."
 no_security = true
 checkable = true
 
@@ -191,11 +191,16 @@ model = "openai/gpt-6.1-sol"
 
 [opencode.roles]
 # `tier` = GPT lane, `free_tier` = Free lane. Same `effort` in both lanes.
+# The Free lane is for checkable, non-security units only, so `hard`, `review`
+# and `design` are GPT-lane-only (no `free_tier`). Every free tier is
+# `no_security` + `checkable`, and `free_hard` is the top of `free_ladder`, so
+# a free `hard`/`review`/`design` would either take security content or have no
+# stronger tier to review it. tests/test_models_config.py enforces this.
 worker    = { work = "Mechanical extraction, scoped lookup, classification", agent = ["chuck-worker", "explore", "general"], tier = "luna", free_tier = "free_small", effort = "low" }
 implement = { work = "Clear implementation, scripts, docs, subsystem explanation", agent = ["chuck-artisan", "general"], tier = "sol", free_tier = "free", effort = "medium" }
-hard      = { work = "Tricky invariants, security, concurrency, crypto", agent = ["chuck-artisan", "general"], tier = "sol", free_tier = "free_hard", effort = "high" }
-review    = { work = "Independent review (general only with an explicit read-only brief)", agent = ["chuck-reviewer", "general"], tier = "sol", free_tier = "free_hard", effort = "high" }
-design    = { work = "Ambiguous debugging, design, failed high-effort work", agent = ["general"], tier = "sol", free_tier = "free_hard", effort = "xhigh" }
+hard      = { work = "Tricky invariants, security, concurrency, crypto", agent = ["chuck-artisan", "general"], tier = "sol", effort = "high" }
+review    = { work = "Independent review (general only with an explicit read-only brief)", agent = ["chuck-reviewer", "general"], tier = "sol", effort = "high" }
+design    = { work = "Ambiguous debugging, design, failed high-effort work", agent = ["general"], tier = "sol", effort = "xhigh" }
 free      = { work = "Optional checkable, non-sensitive read-only units", agent = ["chuck-free", "explore"], tier = "free_small", free_tier = "free_small", effort = "low" }
 
 # ------------------------------------------------------------------- Profiles

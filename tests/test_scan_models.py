@@ -128,6 +128,40 @@ class ScanModelsTests(unittest.TestCase):
         self.assertTrue(any(i.endswith("-free") for i in ids))
         self.assertTrue(data["_cost_unknown"])
 
+    def test_check_allow_unknown_compares_ids_only(self):
+        text = ("[opencode.free_candidates]\nscanned = \"2026-11-09\"\n\n"
+                '[opencode.free_candidates."opencode/old-free"]\n'
+                'provider = "opencode"\nname = "Old"\nvariants = []\nreleased = 0\n\n'
+                "[opencode.tiers.x]\nmodel = \"p/m\"\n")
+        cands = scan_models.parse_catalog(catalog([
+            {"id": "opencode/new-free", "name": "New", "status": "active",
+             "variants": ["low"], "released": 1, "cost": [FREE]},
+        ]))
+        self.assertEqual(scan_models.check(cands, text, allow_unknown=True), 1)
+        synced = scan_models._insert_candidates(text, cands, "2026-11-09")
+        self.assertEqual(scan_models.check(cands, synced, allow_unknown=True), 0)
+
+    def test_cli_check_without_cost_data_errors(self):
+        import subprocess
+        import sys
+        result = subprocess.run(
+            [sys.executable, "-I", str(SCRIPT), "--check", "--providers", "opencode"],
+            capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--allow-unknown", result.stderr)
+
+    def test_cli_check_allow_unknown_runs(self):
+        import subprocess
+        import sys
+        # The CLI cannot prove $0, but it can compare ids; exit is 1 here
+        # because the live catalog differs from the committed list.
+        result = subprocess.run(
+            [sys.executable, "-I", str(SCRIPT), "--check",
+             "--providers", "opencode", "--allow-unknown"],
+            capture_output=True, text=True)
+        self.assertIn(result.returncode, (0, 1))
+        self.assertNotIn("error:", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

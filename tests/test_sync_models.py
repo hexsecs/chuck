@@ -28,6 +28,33 @@ class SyncModelsTests(unittest.TestCase):
                                "tiers": {"t": {"model": "p/m"}}}}
         self.assertEqual(sync_models.wanted(config, "opencode.r"), {"model": "p/m#low"})
 
+    def test_prices_age_reports_days(self):
+        from datetime import date, timedelta
+        today = date.today().isoformat()
+        old = (date.today() - timedelta(days=45)).isoformat()
+        self.assertEqual(sync_models.prices_age({"claude": {"prices_checked": today}}), 0)
+        self.assertEqual(sync_models.prices_age({"claude": {"prices_checked": old}}), 45)
+        self.assertIsNone(sync_models.prices_age({"claude": {}}))
+        self.assertIsNone(sync_models.prices_age({"claude": {"prices_checked": "not-a-date"}}))
+
+    def test_check_fails_when_prices_stale(self):
+        import subprocess
+        import sys
+        # --max-age 0 makes any non-today price date stale.
+        result = subprocess.run(
+            [sys.executable, "-I", str(SCRIPT), "--check", "--max-age", "0"],
+            capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("prices_checked", result.stdout)
+
+    def test_check_passes_within_max_age(self):
+        import subprocess
+        import sys
+        result = subprocess.run(
+            [sys.executable, "-I", str(SCRIPT), "--check", "--max-age", "365"],
+            capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
