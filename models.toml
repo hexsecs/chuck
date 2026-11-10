@@ -7,13 +7,16 @@
 #
 # Roles:   agent  = agent type to dispatch (first advertised one wins;
 #                   fall back to the runtime's general agent)
-#          tier   = a key in that runtime's [*.tiers]
+#          tier   = a key in that runtime's [*.tiers] (OpenCode: GPT lane)
+#          free_tier = a key in [opencode.tiers] (OpenCode: Free lane only)
 #          effort = reasoning effort for the call
 # Tiers:   model  = what goes in the call's `model` field
 #          ask_first   = never pick this tier unprompted; ask the user first
 #          no_security = never use this tier for security content
 #          checkable   = output must be checkable (JSON shape, tests) and is
 #                        always reviewed by a stronger tier
+# [opencode].free_ladder = Free-lane escalation order. Escalation stays in the
+#          coordinator's lane; it never crosses providers without approval.
 # ladder = escalation order, cheapest first. `max_effort` caps effort retries
 #          on a tier before moving up.
 
@@ -67,15 +70,118 @@ last_resort    = { work = "Top non-ask_first tier at max_effort already failed, 
 # Model IDs and #variants were present on 2026-11-06. Chuck still discovers
 # models at runtime and treats this as a starting policy, not a ranking.
 [opencode]
-ladder = ["free", "luna", "sol"]
+ladder = ["luna", "sol"]
+free_ladder = ["free_small", "free", "free_hard"]
 max_effort = "xhigh"
+# Lane is auto-detected from the coordinator model each session (see
+# references/opencode.md "Main-model lane"). `ladder`/`tier` is the GPT lane
+# (coordinator = openai/*). `free_ladder`/`free_tier` is the Free lane
+# (coordinator is a $0 `-free` model). Subagents stay in the coordinator's
+# lane; escalation never crosses lanes or providers.
+# `[opencode.free_candidates]` is a generated list from
+# `scripts/scan-models.py --update`: it records what the catalog had on
+# `scanned`. Choosing `free_ladder` from it is a human/measured decision,
+# not a capability ranking — the catalog has no quality signal.
+# It holds only the coordinator's lane provider (`opencode/*-free`); other
+# providers' $0 models are candidates only after the user approves switching
+# providers.
 
-[opencode.tiers.free]
+[opencode.free_candidates]
+scanned = "2026-11-09"
+# Verified by the Code Mode scan (real cost data): 12 active $0 models on the
+# `opencode` provider. `openrouter/*:free` models are a different provider and
+# are excluded unless the user approves switching providers.
+
+[opencode.free_candidates."opencode/iceman-free"]
+provider = "opencode"
+name = "Iceman Free"
+variants = []
+released = 1793923200000
+
+[opencode.free_candidates."opencode/inkling-2-small-free"]
+provider = "opencode"
+name = "Inkling 2 Small Free"
+variants = ["none", "minimal", "low", "medium", "high", "max"]
+released = 1793836800000
+
+[opencode.free_candidates."opencode/longcat-2.5-free"]
+provider = "opencode"
+name = "LongCat 2.5 Free"
+variants = []
+released = 1793577600000
+
+[opencode.free_candidates."opencode/flint-40b-free"]
+provider = "opencode"
+name = "Flint 40B Free"
+variants = ["low", "medium", "high", "xhigh", "max"]
+released = 1792540800000
+
+[opencode.free_candidates."opencode/minimax-m3.1-flash-free"]
+provider = "opencode"
+name = "MiniMax M3.1 Flash Free"
+variants = ["low", "medium", "high", "xhigh", "max"]
+released = 1792368000000
+
+[opencode.free_candidates."opencode/nemotron-3.5-super-vl-free"]
+provider = "opencode"
+name = "Nemotron 3.5 Super VL Free"
+variants = ["none", "minimal", "low", "medium", "high", "xhigh"]
+released = 1792022400000
+
+[opencode.free_candidates."opencode/nemotron-3.5-lightning-free"]
+provider = "opencode"
+name = "Nemotron 3.5 Lightning Free"
+variants = []
+released = 1786406400000
+
+[opencode.free_candidates."opencode/beam-free"]
+provider = "opencode"
+name = "Beam Free"
+variants = ["low", "medium", "high", "xhigh", "max"]
+released = 1791158400000
+
+[opencode.free_candidates."opencode/mimo-v2.6-flash-free"]
+provider = "opencode"
+name = "MiMo-V2.6-Flash Free"
+variants = []
+released = 1790035200000
+
+[opencode.free_candidates."opencode/deepseek-v4.1-flash-free"]
+provider = "opencode"
+name = "DeepSeek V4.1 Flash Free"
+variants = ["low", "high", "max"]
+released = 1788998400000
+
+[opencode.free_candidates."opencode/glm-5.3-flash-free"]
+provider = "opencode"
+name = "GLM-5.3-Flash Free"
+variants = ["low", "high", "max"]
+released = 1787702400000
+
+[opencode.free_candidates."opencode/big-pickle"]
+provider = "opencode"
+name = "Big Pickle"
+variants = []
+released = 1760659200000
+
+[opencode.tiers.free_small]
 model = "opencode/inkling-2-small-free"
-note = "Optional, opt-in only; see the free-lane privacy preflight in references/opencode.md"
+note = "Free-lane mechanical tier; verified $0 on 2026-11-09. In the GPT lane this is the opt-in checkable exception only."
 no_security = true
 checkable = true
 optional = true
+
+[opencode.tiers.free]
+model = "opencode/minimax-m3.1-flash-free"
+note = "Free-lane default implement/review tier; verified $0 on 2026-11-09. Ranking vs flint-40b-free is unmeasured — swap after a measured comparison."
+no_security = true
+checkable = true
+
+[opencode.tiers.free_hard]
+model = "opencode/flint-40b-free"
+note = "Free-lane hard/design tier; verified $0 on 2026-11-09. If `free` and `free_hard` both fail at max, ask before using a paid tier."
+no_security = true
+checkable = true
 
 [opencode.tiers.luna]
 model = "openai/gpt-6-luna"
@@ -84,12 +190,13 @@ model = "openai/gpt-6-luna"
 model = "openai/gpt-6.1-sol"
 
 [opencode.roles]
-worker    = { work = "Mechanical extraction, scoped lookup, classification", agent = ["chuck-worker", "explore", "general"], tier = "luna", effort = "low" }
-implement = { work = "Clear implementation, scripts, docs, subsystem explanation", agent = ["chuck-artisan", "general"], tier = "sol", effort = "medium" }
-hard      = { work = "Tricky invariants, security, concurrency, crypto", agent = ["chuck-artisan", "general"], tier = "sol", effort = "high" }
-review    = { work = "Independent review (general only with an explicit read-only brief)", agent = ["chuck-reviewer", "general"], tier = "sol", effort = "high" }
-design    = { work = "Ambiguous debugging, design, failed high-effort work", agent = ["general"], tier = "sol", effort = "xhigh" }
-free      = { work = "Optional checkable, non-sensitive read-only units", agent = ["chuck-free", "explore"], tier = "free", effort = "low" }
+# `tier` = GPT lane, `free_tier` = Free lane. Same `effort` in both lanes.
+worker    = { work = "Mechanical extraction, scoped lookup, classification", agent = ["chuck-worker", "explore", "general"], tier = "luna", free_tier = "free_small", effort = "low" }
+implement = { work = "Clear implementation, scripts, docs, subsystem explanation", agent = ["chuck-artisan", "general"], tier = "sol", free_tier = "free", effort = "medium" }
+hard      = { work = "Tricky invariants, security, concurrency, crypto", agent = ["chuck-artisan", "general"], tier = "sol", free_tier = "free_hard", effort = "high" }
+review    = { work = "Independent review (general only with an explicit read-only brief)", agent = ["chuck-reviewer", "general"], tier = "sol", free_tier = "free_hard", effort = "high" }
+design    = { work = "Ambiguous debugging, design, failed high-effort work", agent = ["general"], tier = "sol", free_tier = "free_hard", effort = "xhigh" }
+free      = { work = "Optional checkable, non-sensitive read-only units", agent = ["chuck-free", "explore"], tier = "free_small", free_tier = "free_small", effort = "low" }
 
 # ------------------------------------------------------------------- Profiles
 # Which role supplies the default model/effort written into each bundled agent

@@ -1,6 +1,6 @@
 ---
 name: chuck
-description: Orchestrator mode for Claude Code and OpenCode - plans multi-part work, does small parts inline, delegates the rest with explicit model and supported reasoning effort, then verifies what comes back. Uses GPT-first, subscription-aware routing and optional free workers in OpenCode. Use for /chuck, "orchestrate this", "delegate this", "farm this out", "run this for me", "keep the spice moving", "the spice must flow", or any multi-part job the user wants coordinated while they stay in the loop.
+description: Orchestrator mode for Claude Code and OpenCode - plans multi-part work, does small parts inline, delegates the rest with explicit model and supported reasoning effort, then verifies what comes back. In OpenCode it mirrors the coordinator model lane (GPT models if the coordinator is openai/*, free-tier models if it is a $0 -free model) with discovery-validated routing, plus optional privacy-gated free workers. Use for /chuck, "orchestrate this", "delegate this", "farm this out", "run this for me", "keep the spice moving", "the spice must flow", or any multi-part job the user wants coordinated while they stay in the loop.
 compatibility: Claude Code or OpenCode with subagents; use the runtime adapter for tool names and model selection.
 ---
 
@@ -27,6 +27,19 @@ first dispatch of a session and route only from it. `[claude]` is for Claude
 Code and `[opencode]` is for OpenCode. Never hard-code a model the config doesn't name.
 If the user asks to change routing, edit `models.toml` and run
 `python3 -I scripts/sync-models.py` so the bundled agent defaults match.
+
+**Main-model lane (OpenCode only):** Before the first dispatch, identify the
+coordinator's own model from the runtime context (the `Your Model` block:
+provider ID + model ID) or your self-knowledge (e.g. `openai/gpt-6.1-sol`,
+`opencode/crouton-alpha-free`). If it is `openai/*`, use the GPT lane
+(`ladder`, `tier`); if it ends in `-free` or otherwise costs $0, use the Free
+lane (`free_ladder`, `free_tier`). Subagents stay in the coordinator's lane;
+never route to a different provider spontaneously, including on escalation.
+The sole exception is the opt-in `free` role in the GPT lane, which is
+privacy-gated in `references/opencode.md`. Run the discovery pass there once
+per session and re-run it if a model or variant is unavailable. If the
+coordinator provider is unknown or local, stay on that provider and discover
+its models; ask before switching providers.
 
 In **Claude Code**, use `[claude]` and the bundled `agents/claude/*.md`.
 Pass a separate `effort` only if the actual Agent schema supports it; otherwise
@@ -96,8 +109,11 @@ when step 3 says to.
 
 4. **Route each delegated task.** Apply the runtime adapter first. Pick the
    role in `models.toml` (`[claude.roles]` or `[opencode.roles]`) whose `work`
-   fits. Then explicitly select that role's tier `model` and the role's `effort`
-   on each delegation call. A role's `agent` list is in preference order: use
+   fits. In OpenCode, first pick the lane from the coordinator model (see
+   Runtime adapter): GPT lane uses the role's `tier`, Free lane uses the
+   role's `free_tier`, same `effort` either way. Then explicitly select that
+   tier's `model` and the role's `effort` on each delegation call.
+   A role's `agent` list is in preference order: use
    the first one the session advertises, else the runtime's general agent
    (`general-purpose` in Claude Code, `general` in OpenCode). For a review on
    a general agent, the brief says: read the diff and the code it touches,
@@ -111,8 +127,13 @@ when step 3 says to.
    `reviewer` task to a higher tier, keep `reviewer` and raise `model`.
 
    Hard rules (tier flags in `models.toml`):
+   - **Stay in the coordinator's lane.** In OpenCode, escalation moves along
+     `ladder` (GPT) or `free_ladder` (Free) only. Never cross to the other
+     lane or another provider to fix a failure; ask the user instead.
    - **`no_security` tiers never get security content** (vulnerabilities,
-     exploits, attacks). Start at the next tier on the ladder.
+     exploits, attacks). In the Free lane all free tiers carry this flag, so
+     a security task has no eligible free tier: stop and ask before using a
+     paid tier. Never silently fall back to paid.
    - **`checkable` tier output must be checkable**: JSON with a stated shape,
      tests that run, or output a stronger tier reads next. It never reaches
      you unreviewed.
